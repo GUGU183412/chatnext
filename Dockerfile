@@ -1,34 +1,31 @@
 FROM node:18-alpine AS base
 
-FROM base AS deps
-
-RUN apk add --no-cache libc6-compat
-
-WORKDIR /app
-
-COPY package.json yarn.lock ./
-
-RUN yarn config set registry 'https://registry.npmmirror.com/'
-RUN yarn install
-
 FROM base AS builder
-
-RUN apk update && apk add --no-cache git
 
 ENV OPENAI_API_KEY=""
 ENV GOOGLE_API_KEY=""
 ENV CODE=""
 
+# if you located in China, you can use taobao registry to speed up
+# RUN npm config set registry 'https://registry.npmmirror.com/'
+
+RUN npm install -g pnpm@latest-9
+
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+
+COPY .npmrc package.json pnpm-lock.yaml ./
+
+RUN pnpm install --frozen-lockfile
+
 COPY . .
 
-RUN yarn build
+RUN pnpm build
 
 FROM base AS runner
+
 WORKDIR /app
 
-RUN apk add proxychains-ng
+RUN apk add --no-cache proxychains-ng
 
 ENV PROXY_URL=""
 ENV OPENAI_API_KEY=""
