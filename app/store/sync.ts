@@ -25,6 +25,7 @@ export type SyncStore = GetStoreState<typeof useSyncStore>;
 
 const DEFAULT_SYNC_STATE = {
   provider: ProviderType.WebDAV,
+  enableAutoSync: true,
   useProxy: true,
   proxyUrl: corsPath(ApiPath.Cors),
 
@@ -43,6 +44,8 @@ const DEFAULT_SYNC_STATE = {
   lastSyncTime: 0,
   lastProvider: "",
 };
+
+let lastSyncTime = 0;
 
 export const useSyncStore = createPersistStore(
   DEFAULT_SYNC_STATE,
@@ -90,6 +93,16 @@ export const useSyncStore = createPersistStore(
     },
 
     async sync() {
+      if (lastSyncTime && lastSyncTime >= Date.now() - 800) {
+        return;
+      }
+      lastSyncTime = Date.now();
+
+      const enableAutoSync = get().enableAutoSync;
+      if (!enableAutoSync) {
+        return;
+      }
+
       const localState = getLocalAppState();
       const provider = get().provider;
       const config = get()[provider];
@@ -104,9 +117,7 @@ export const useSyncStore = createPersistStore(
           );
           return;
         } else {
-          const parsedRemoteState = JSON.parse(
-            await client.get(config.username),
-          ) as AppState;
+          const parsedRemoteState = JSON.parse(remoteState) as AppState;
           mergeAppState(localState, parsedRemoteState);
           setLocalAppState(localState);
         }
@@ -123,6 +134,14 @@ export const useSyncStore = createPersistStore(
     async check() {
       const client = this.getClient();
       return await client.check();
+    },
+
+    async autoSync() {
+      const { lastSyncTime, provider } = get();
+      const syncStore = useSyncStore.getState();
+      if (lastSyncTime && syncStore.cloudSync()) {
+        syncStore.sync();
+      }
     },
   }),
   {
